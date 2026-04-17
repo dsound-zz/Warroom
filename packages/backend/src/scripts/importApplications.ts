@@ -32,7 +32,11 @@ async function main() {
   logger.info({ count: items.length }, 'importing applications');
 
   for (const item of items) {
-    const [row] = await db.insert(applications).values(item).returning();
+    // Drizzle timestamp columns require Date, not ISO string
+    const [row] = await db
+      .insert(applications)
+      .values({ ...item, appliedAt: item.appliedAt ? new Date(item.appliedAt) : null })
+      .returning();
     if (!row) continue;
 
     await db.insert(stageEvents).values({

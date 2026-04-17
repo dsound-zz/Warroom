@@ -30,7 +30,11 @@ dnaRouter.get('/', async (c) => {
 dnaRouter.post('/', zValidator('json', CreateDnaSchema), async (c) => {
   const body = c.req.valid('json');
   try {
-    const [row] = await db.insert(dna).values(body).returning();
+    // meta is optional in the schema but Drizzle's jsonb column rejects undefined.
+    const [row] = await db
+      .insert(dna)
+      .values({ kind: body.kind, content: body.content, meta: body.meta ?? null })
+      .returning();
     return c.json(row, 201);
   } catch (err) {
     logger.error({ err }, 'dna create error');

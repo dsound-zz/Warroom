@@ -13,7 +13,12 @@
     "build": "pnpm -r build",
     "typecheck": "pnpm -r typecheck",
     "db:generate": "pnpm --filter @warroom/backend db:generate",
-    "db:migrate": "pnpm --filter @warroom/backend db:migrate"
+    "db:migrate": "pnpm --filter @warroom/backend db:migrate",
+    "ingester:hn": "pnpm --filter @warroom/backend ingester:hn",
+    "ingester:techcrunch": "pnpm --filter @warroom/backend ingester:techcrunch",
+    "ingester:engblogs": "pnpm --filter @warroom/backend ingester:engBlogs",
+    "import:dna": "pnpm --filter @warroom/backend import:dna",
+    "import:applications": "pnpm --filter @warroom/backend import:applications"
   },
   "devDependencies": {
     "typescript": "^5.5.4"

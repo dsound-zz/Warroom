@@ -38,7 +38,8 @@ async function main() {
   logger.info({ count: items.length }, 'importing DNA entries');
 
   for (const item of items) {
-    await db.insert(dna).values(item);
+    // meta is optional in schema but Drizzle's jsonb column rejects undefined
+    await db.insert(dna).values({ kind: item.kind, content: item.content, meta: item.meta ?? null });
   }
 
   logger.info({ count: items.length }, 'DNA import complete');

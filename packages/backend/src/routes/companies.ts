@@ -90,9 +90,16 @@ companiesRouter.patch('/:id', async (c) => {
   if (!body.success) throw new HTTPException(400, { message: 'Validation failed' });
 
   try {
+    const updateSet = {
+      updatedAt: new Date(),
+      ...(body.data.name !== undefined ? { name: body.data.name } : {}),
+      ...(body.data.domain !== undefined ? { domain: body.data.domain } : {}),
+      ...(body.data.notes !== undefined ? { notes: body.data.notes } : {}),
+    };
+
     const [row] = await db
       .update(companies)
-      .set({ ...body.data, updatedAt: new Date() })
+      .set(updateSet)
       .where(eq(companies.id, id))
       .returning();
     if (!row) throw new HTTPException(404, { message: 'Company not found' });

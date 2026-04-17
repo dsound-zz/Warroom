@@ -7,7 +7,7 @@ export function Companies() {
 
   const { data, isLoading, error } = useQuery({
     queryKey: ['companies', search],
-    queryFn: () => api.companies.list({ search: search || undefined, limit: 100 }),
+    queryFn: () => api.companies.list(search ? { search, limit: 100 } : { limit: 100 }),
     placeholderData: (prev) => prev,
   });
 

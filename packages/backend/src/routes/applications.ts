@@ -105,7 +105,11 @@ applicationsRouter.post('/', zValidator('json', CreateApplicationSchema), async 
   const body = c.req.valid('json');
 
   try {
-    const [row] = await db.insert(applications).values(body).returning();
+    // Drizzle timestamp columns require Date, not ISO string
+    const [row] = await db
+      .insert(applications)
+      .values({ ...body, appliedAt: body.appliedAt ? new Date(body.appliedAt) : null })
+      .returning();
     if (!row) throw new HTTPException(500, { message: 'Insert failed' });
 
     // Record initial stage event
@@ -137,9 +141,20 @@ applicationsRouter.patch('/:id', zValidator('json', UpdateApplicationSchema), as
       .limit(1);
     if (!existing) throw new HTTPException(404, { message: 'Application not found' });
 
+    // Build update set explicitly to satisfy exactOptionalPropertyTypes —
+    // spreading optional fields gives T | undefined which Drizzle's set() rejects.
+    const updateSet = {
+      lastActivityAt: new Date(),
+      updatedAt: new Date(),
+      ...(body.stage !== undefined ? { stage: body.stage } : {}),
+      ...(body.role !== undefined ? { role: body.role } : {}),
+      ...(body.url !== undefined ? { url: body.url } : {}),
+      ...(body.notes !== undefined ? { notes: body.notes } : {}),
+    };
+
     const [updated] = await db
       .update(applications)
-      .set({ ...body, lastActivityAt: new Date(), updatedAt: new Date() })
+      .set(updateSet)
       .where(eq(applications.id, id))
       .returning();
 
