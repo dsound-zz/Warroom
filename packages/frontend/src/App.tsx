@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route, NavLink } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { Layout } from './components/Layout.js';
 import { Today } from './pages/Today.js';
 import { Pipeline } from './pages/Pipeline.js';
@@ -9,7 +9,8 @@ export function App() {
     <BrowserRouter>
       <Routes>
         <Route path="/" element={<Layout />}>
-          <Route index element={<Today />} />
+          <Route index element={<Navigate to="/today" replace />} />
+          <Route path="today" element={<Today />} />
           <Route path="pipeline" element={<Pipeline />} />
           <Route path="companies" element={<Companies />} />
         </Route>

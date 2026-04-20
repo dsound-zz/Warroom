@@ -1,5 +1,11 @@
 import { z } from 'zod';
 
+export const CompanyBriefSchema = z.object({
+  id: z.number().int(),
+  name: z.string(),
+});
+export type CompanyBrief = z.infer<typeof CompanyBriefSchema>;
+
 export const CompanySchema = z.object({
   id: z.number().int().positive(),
   name: z.string().min(1),

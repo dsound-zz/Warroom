@@ -11,18 +11,19 @@ export type { Stage } from './stages.js';
 // Signals
 export {
   SignalSchema,
-  CreateSignalSchema,
-  SignalListResponseSchema,
+  SignalsListQuerySchema,
+  SignalsListResponseSchema,
 } from './signals.js';
-export type { Signal, CreateSignal, SignalListResponse } from './signals.js';
+export type { Signal, SignalsListQuery, SignalsListResponse } from './signals.js';
 
 // Companies
 export {
+  CompanyBriefSchema,
   CompanySchema,
   CreateCompanySchema,
   CompanyListResponseSchema,
 } from './companies.js';
-export type { Company, CreateCompany, CompanyListResponse } from './companies.js';
+export type { CompanyBrief, Company, CreateCompany, CompanyListResponse } from './companies.js';
 
 // Applications
 export {

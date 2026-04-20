@@ -1,61 +1,112 @@
 import { Hono } from 'hono';
 import { zValidator } from '@hono/zod-validator';
-import { z } from 'zod';
+import { eq, and, gte, lte, desc, sql } from 'drizzle-orm';
 import { HTTPException } from 'hono/http-exception';
-import { eq, desc, sql } from 'drizzle-orm';
 import { db } from '../db/index.js';
-import { signals } from '../db/schema.js';
+import { signals, companies } from '../db/schema.js';
 import { logger } from '../logger.js';
-import { DEFAULT_LIMIT, MAX_LIMIT } from '@warroom/shared';
-
-const listQuerySchema = z.object({
-  limit: z.coerce.number().int().min(1).max(MAX_LIMIT).default(DEFAULT_LIMIT),
-  offset: z.coerce.number().int().min(0).default(0),
-  since: z.string().datetime({ offset: true }).optional(),
-  until: z.string().datetime({ offset: true }).optional(),
-  companyId: z.coerce.number().int().positive().optional(),
-});
+import { SignalsListQuerySchema, type Signal } from '@warroom/shared';
 
 export const signalsRouter = new Hono();
 
-signalsRouter.get('/', zValidator('query', listQuerySchema), async (c) => {
-  const { limit, offset, since, until, companyId } = c.req.valid('query');
+const COLS = {
+  id: signals.id,
+  source: signals.source,
+  sourceUrl: signals.sourceUrl,
+  title: signals.title,
+  snippet: signals.snippet,
+  ingestedAt: signals.ingestedAt,
+  relevanceScore: signals.relevanceScore,
+  actedOn: signals.actedOn,
+  dismissed: signals.dismissed,
+  companyId: signals.companyId,
+  companyName: companies.name,
+  companyDbId: companies.id,
+};
+
+type Row = typeof COLS extends Record<string, unknown>
+  ? {
+      id: number;
+      source: string;
+      sourceUrl: string;
+      title: string;
+      snippet: string | null;
+      ingestedAt: Date;
+      relevanceScore: number | null;
+      actedOn: boolean;
+      dismissed: boolean;
+      companyId: number | null;
+      companyName: string | null;
+      companyDbId: number | null;
+    }
+  : never;
+
+function mapRow(row: Row): Signal {
+  return {
+    id: row.id,
+    source: row.source,
+    signalType: row.source,
+    title: row.title,
+    url: row.sourceUrl,
+    extractedSummary: row.snippet,
+    score: row.relevanceScore ?? null,
+    detectedAt: row.ingestedAt.toISOString(),
+    actedOn: row.actedOn,
+    dismissed: row.dismissed,
+    company:
+      row.companyDbId !== null && row.companyName !== null
+        ? { id: row.companyDbId, name: row.companyName }
+        : null,
+  };
+}
+
+async function getSignalById(id: number): Promise<Signal> {
+  const rows = await db
+    .select(COLS)
+    .from(signals)
+    .leftJoin(companies, eq(signals.companyId, companies.id))
+    .where(eq(signals.id, id))
+    .limit(1);
+  const row = rows[0];
+  if (!row) throw new HTTPException(404, { message: 'Signal not found' });
+  return mapRow(row as Row);
+}
+
+signalsRouter.get('/', zValidator('query', SignalsListQuerySchema), async (c) => {
+  const q = c.req.valid('query');
+
+  const now = new Date();
+  const sinceDate = q.since ? new Date(q.since) : new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+  const untilDate = q.until ? new Date(q.until) : now;
+
+  const where = and(
+    gte(signals.ingestedAt, sinceDate),
+    lte(signals.ingestedAt, untilDate),
+    q.source !== undefined ? eq(signals.source, q.source) : undefined,
+    !q.includeActed ? eq(signals.actedOn, false) : undefined,
+    !q.includeDismissed ? eq(signals.dismissed, false) : undefined,
+  );
 
   try {
-    const conditions: Parameters<typeof db.select>[0] extends undefined
-      ? never
-      // We build conditions inline below
-      : unknown[] = [];
-
     const rows = await db
-      .select()
+      .select(COLS)
       .from(signals)
-      .where(
-        sql`${companyId !== undefined ? sql`${signals.companyId} = ${companyId} AND ` : sql``}
-            ${since !== undefined ? sql`${signals.ingestedAt} >= ${new Date(since)} AND ` : sql``}
-            ${until !== undefined ? sql`${signals.ingestedAt} <= ${new Date(until)} AND ` : sql``}
-            TRUE`,
-      )
+      .leftJoin(companies, eq(signals.companyId, companies.id))
+      .where(where)
       .orderBy(desc(signals.ingestedAt))
-      .limit(limit)
-      .offset(offset);
+      .limit(q.limit)
+      .offset(q.offset);
 
-    // Get total count
     const [countRow] = await db
       .select({ count: sql<number>`count(*)::int` })
       .from(signals)
-      .where(
-        sql`${companyId !== undefined ? sql`${signals.companyId} = ${companyId} AND ` : sql``}
-            ${since !== undefined ? sql`${signals.ingestedAt} >= ${new Date(since)} AND ` : sql``}
-            ${until !== undefined ? sql`${signals.ingestedAt} <= ${new Date(until)} AND ` : sql``}
-            TRUE`,
-      );
+      .where(where);
 
     return c.json({
-      items: rows,
+      items: rows.map((r) => mapRow(r as Row)),
       total: countRow?.count ?? 0,
-      limit,
-      offset,
+      limit: q.limit,
+      offset: q.offset,
     });
   } catch (err) {
     logger.error({ err }, 'signals list error');
@@ -63,19 +114,42 @@ signalsRouter.get('/', zValidator('query', listQuerySchema), async (c) => {
   }
 });
 
-signalsRouter.get('/:id', async (c) => {
+signalsRouter.post('/:id/act', async (c) => {
   const id = Number(c.req.param('id'));
-  if (!Number.isInteger(id) || id < 1) {
-    throw new HTTPException(400, { message: 'Invalid id' });
-  }
+  if (!Number.isInteger(id) || id < 1) return c.json({ error: 'Invalid id' }, 400);
 
   try {
-    const [row] = await db.select().from(signals).where(eq(signals.id, id)).limit(1);
-    if (!row) throw new HTTPException(404, { message: 'Signal not found' });
-    return c.json(row);
+    const updated = await db
+      .update(signals)
+      .set({ actedOn: true })
+      .where(eq(signals.id, id))
+      .returning({ id: signals.id });
+
+    if (updated.length === 0) return c.json({ error: 'Not found' }, 404);
+    return c.json(await getSignalById(id));
   } catch (err) {
     if (err instanceof HTTPException) throw err;
-    logger.error({ err }, 'signals get error');
+    logger.error({ err }, 'signals act error');
+    throw new HTTPException(500, { message: 'Internal server error' });
+  }
+});
+
+signalsRouter.post('/:id/dismiss', async (c) => {
+  const id = Number(c.req.param('id'));
+  if (!Number.isInteger(id) || id < 1) return c.json({ error: 'Invalid id' }, 400);
+
+  try {
+    const updated = await db
+      .update(signals)
+      .set({ dismissed: true })
+      .where(eq(signals.id, id))
+      .returning({ id: signals.id });
+
+    if (updated.length === 0) return c.json({ error: 'Not found' }, 404);
+    return c.json(await getSignalById(id));
+  } catch (err) {
+    if (err instanceof HTTPException) throw err;
+    logger.error({ err }, 'signals dismiss error');
     throw new HTTPException(500, { message: 'Internal server error' });
   }
 });

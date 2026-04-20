@@ -1,40 +1,36 @@
 import { z } from 'zod';
+import { CompanyBriefSchema } from './companies.js';
 
 export const SignalSchema = z.object({
-  id: z.number().int().positive(),
-  source: z.string().min(1),
-  sourceUrl: z.string().url(),
-  title: z.string().min(1),
-  snippet: z.string().nullable(),
-  companyNameHint: z.string().nullable(),
-  companyId: z.number().int().positive().nullable(),
-  publishedAt: z.string().datetime({ offset: true }).nullable(),
-  ingestedAt: z.string().datetime({ offset: true }),
-  /** Phase 3: LLM-assigned relevance score 0..1 */
-  relevanceScore: z.number().min(0).max(1).nullable(),
-  /** Phase 3: structured tags extracted by LLM */
-  tags: z.array(z.string()).nullable(),
+  id: z.number().int(),
+  source: z.string(),
+  signalType: z.string(),
+  title: z.string().nullable(),
+  url: z.string().nullable(),
+  extractedSummary: z.string().nullable(),
+  score: z.number().nullable(),
+  detectedAt: z.string(),
+  actedOn: z.boolean(),
+  dismissed: z.boolean(),
+  company: CompanyBriefSchema.nullable(),
 });
-
 export type Signal = z.infer<typeof SignalSchema>;
 
-export const CreateSignalSchema = SignalSchema.omit({
-  id: true,
-  ingestedAt: true,
-  relevanceScore: true,
-  tags: true,
-  companyId: true,
-}).extend({
-  companyNameHint: z.string().nullable().optional(),
+export const SignalsListQuerySchema = z.object({
+  since: z.string().datetime().optional(),
+  until: z.string().datetime().optional(),
+  source: z.string().optional(),
+  includeDismissed: z.coerce.boolean().default(false),
+  includeActed: z.coerce.boolean().default(false),
+  limit: z.coerce.number().int().min(1).max(200).default(50),
+  offset: z.coerce.number().int().min(0).default(0),
 });
+export type SignalsListQuery = z.infer<typeof SignalsListQuerySchema>;
 
-export type CreateSignal = z.infer<typeof CreateSignalSchema>;
-
-export const SignalListResponseSchema = z.object({
+export const SignalsListResponseSchema = z.object({
   items: z.array(SignalSchema),
-  total: z.number().int().nonnegative(),
-  limit: z.number().int().positive(),
-  offset: z.number().int().nonnegative(),
+  total: z.number().int(),
+  limit: z.number().int(),
+  offset: z.number().int(),
 });
-
-export type SignalListResponse = z.infer<typeof SignalListResponseSchema>;
+export type SignalsListResponse = z.infer<typeof SignalsListResponseSchema>;

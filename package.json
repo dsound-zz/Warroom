@@ -8,6 +8,7 @@
     "pnpm": ">=9"
   },
   "scripts": {
+    "dev": "concurrently -n \"BE,FE\" -c \"cyan,magenta\" \"pnpm dev:backend\" \"pnpm dev:frontend\"",
     "dev:backend": "pnpm --filter @warroom/backend dev",
     "dev:frontend": "pnpm --filter @warroom/frontend dev",
     "build": "pnpm -r build",
@@ -21,6 +22,7 @@
     "import:applications": "pnpm --filter @warroom/backend import:applications"
   },
   "devDependencies": {
+    "concurrently": "^9.2.1",
     "typescript": "^5.5.4"
   }
 }

@@ -6,6 +6,7 @@ import {
   integer,
   jsonb,
   real,
+  boolean,
 } from 'drizzle-orm/pg-core';
 import { relations } from 'drizzle-orm';
 
@@ -35,6 +36,8 @@ export const signals = pgTable('signals', {
   companyId: integer('company_id').references(() => companies.id, { onDelete: 'set null' }),
   publishedAt: timestamp('published_at', { withTimezone: true }),
   ingestedAt: timestamp('ingested_at', { withTimezone: true }).notNull().defaultNow(),
+  actedOn: boolean('acted_on').notNull().default(false),
+  dismissed: boolean('dismissed').notNull().default(false),
   // Phase 3 fields — nullable for now
   relevanceScore: real('relevance_score'),
   tags: text('tags').array(),

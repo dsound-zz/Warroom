@@ -14,7 +14,7 @@ import { dnaRouter } from './routes/dna.js';
 const app = new Hono();
 
 // Middleware
-app.use('*', cors({ origin: `http://localhost:${env.BACKEND_PORT}` }));
+app.use('*', cors({ origin: ['http://localhost:5173', 'http://localhost:5174'] }));
 app.use('*', honoLogger());
 
 // Routes
