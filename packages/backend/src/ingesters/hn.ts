@@ -105,6 +105,14 @@ export class HNIngester extends BaseIngester {
         companyNameHint: companyHint,
         domainHint: null,
         publishedAt: hit.created_at ? new Date(hit.created_at) : null,
+        rawPayload: {
+          objectID: hit.objectID,
+          author: hit.author,
+          created_at: hit.created_at,
+          comment_text: hit.comment_text,
+          story_id: hit.story_id,
+          parent_id: hit.parent_id,
+        },
       };
     });
   }

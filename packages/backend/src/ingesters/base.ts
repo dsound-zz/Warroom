@@ -12,6 +12,7 @@ export interface RawSignal {
   companyNameHint: string | null;
   domainHint?: string | null;
   publishedAt: Date | null;
+  rawPayload?: Record<string, unknown>;
 }
 
 export abstract class BaseIngester {
@@ -62,6 +63,7 @@ export abstract class BaseIngester {
           companyNameHint: item.companyNameHint,
           companyId,
           publishedAt: item.publishedAt,
+          rawPayload: item.rawPayload ?? {},
         });
 
         created++;

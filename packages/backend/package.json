@@ -12,7 +12,8 @@
     "ingester:techcrunch": "tsx src/scripts/runIngester.ts techcrunch",
     "ingester:engblogs": "tsx src/scripts/runIngester.ts engBlogs",
     "import:dna": "tsx src/scripts/importDna.ts",
-    "import:applications": "tsx src/scripts/importApplications.ts"
+    "import:applications": "tsx src/scripts/importApplications.ts",
+    "import:tracker": "tsx src/scripts/importTracker.ts"
   },
   "dependencies": {
     "@warroom/shared": "workspace:*",

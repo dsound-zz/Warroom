@@ -1,0 +1,204 @@
+# War Room Experience Corpus
+# One entry per story. Target: 30-50 entries.
+
+- id: duckdb_wasm_avandar
+  title: Replacing server-side pagination with DuckDB-WASM for client-side analytics
+  context: |
+    Avandar Labs, frontend engineer on a small team. The product was a B2B
+    analytics dashboard where users filtered and aggregated millions of rows
+    of customer-level data. Stack was React + Postgres, with paginated HTTP
+    queries for every filter change.
+  problem: |
+    Filter interactions felt broken. Changing a single facet triggered a
+    round trip that returned 8 to 15 seconds later. Users routinely
+    abandoned their analysis mid-session. Business stakeholders thought
+    the fix was "make the API faster."
+  constraints: |
+    Small team, no dedicated backend person for this effort. Changing the
+    database layer was out of scope. The product team wanted a fix in weeks,
+    not quarters. I was frontend-leaning and this was not framed as my
+    problem.
+  approach: |
+    Pushed back on "make the API faster" as the wrong frame. The right
+    frame was "do the analytics in the browser." Prototyped DuckDB-WASM
+    running in a web worker, pulling the user's full dataset once into
+    memory at session start. Filter interactions became sub-100ms because
+    they were local SQL, not network calls. Built a thin query layer so
+    product engineers could keep writing SQL they already knew.
+  outcome: |
+    Interaction latency dropped from 8-15 seconds to under 100ms for
+    filter changes. Initial page load went up by a few seconds (one-time
+    cost to pull the dataset) and we judged the tradeoff worth it. No
+    user complaints about speed after launch. Later built an LLM
+    plain-language query layer on top of the same DuckDB layer so
+    non-SQL users could filter.
+  what_i_learned: |
+    performance problems are often architecture
+    problems wearing a performance costume. The "obvious" optimization
+    (cache more, index more, faster API) can be an order of magnitude
+    worse than reframing where the computation happens. Also: treat
+    the browser as a compute target, not just a display target.
+  technologies:
+    - duckdb-wasm
+    - react
+    - typescript
+    - web-workers
+    - postgres
+    - sql
+  themes:
+    - performance
+    - state-architecture
+    - browser-limits
+    - reframing-problems
+    - wasm
+    - analytics
+  transferable_to: |
+    Staff frontend at data-heavy companies, analytics products,
+    any role where client-side performance is a product differentiator.
+    Hex, Observable, Tinybird, MotherDuck are direct matches.
+  seniority_signal: |
+    Able to reframe a problem the business stated wrong. Able to drive
+    an unusual technical direction solo. Able to identify when a
+    constraint is real vs cosmetic.
+  caveats: |
+    I did not design the original Postgres layer. I did not do the
+    data pipeline work upstream. This is a frontend-and-browser-engine
+    story, not a full-stack infrastructure story.
+  linked_artifacts: []
+  # TODO: write a blog post, record a Loom demo, push a sanitized
+  # code sample to GitHub. All three would strengthen this entry.
+
+  # Beelzebub's RAG
+- id: beelzebub_rag_etymology_separation
+  title: Preventing RAG hallucination by architecturally separating linguistic analysis from document-grounded lookup
+  context: |
+    Beelzebub Explorer, solo project, ongoing. A research tool for deep
+    linguistic and etymological analysis of Gurdjieff's Beelzebub's Tales
+    to His Grandson. Stack: FastAPI + ChromaDB (local all-MiniLM-L6-v2
+    embeddings) + Gemini 2.5 Flash backend, React/TS/Vite frontend.
+  problem: |
+    Early prototype conflated two different kinds of queries: "what are
+    the Greek/Armenian/Sanskrit roots of this invented word" and "what
+    does this character do in chapter 17." When both were answered through
+    the same RAG pipeline, etymology answers started drifting into
+    character details and vice versa. Worse, the LLM would confidently
+    invent etymologies when the document had none.
+  constraints: |
+    Solo project, no budget for OpenAI embeddings, wanted local-only
+    inference for privacy. Could not rely on the LLM's training data
+    for etymologies because Gurdjieff's invented vocabulary is not in
+    any training corpus.
+  approach: |
+    Split the system into two entirely separate pipelines with no shared
+    context. Etymology analysis: strictly linguistic, pulls from a curated
+    etymology database I built, the LLM is only asked to synthesize
+    morpheme-level analysis. Character and narrative queries: pure RAG
+    against ChromaDB passages, with the LLM explicitly instructed to
+    refuse questions outside the retrieved context. The separation is
+    enforced at the routing layer, not the prompt layer.
+  outcome: |
+    Hallucination rate on etymology queries dropped to near zero because
+    the LLM now has no degrees of freedom to invent roots. Character
+    queries became grounded in actual passages. The tradeoff: users
+    can't ask "what's the etymology of the character's name" as a single
+    question, they have to ask twice. I judged that tradeoff worth it.
+  what_i_learned: |
+    architectural separation beats prompt
+    engineering for preventing hallucination. If two kinds of knowledge
+    have different provenance, they should have different pipelines,
+    even if the UX is slightly worse.
+  technologies:
+    - fastapi
+    - chromadb
+    - all-minilm-l6-v2
+    - gemini-2.5-flash
+    - rag
+    - react
+    - typescript
+    - vite
+  themes:
+    - rag
+    - hallucination-prevention
+    - architecture-over-prompts
+    - local-inference
+    - llm-routing
+  transferable_to: |
+    Any AI/LLM company worried about grounding. Legal tech, medical,
+    financial services, compliance. Also frontend roles at LLM-heavy
+    shops that care about systems thinking. Langfuse, Helicone,
+    Humanloop, and any company building RAG products.
+  seniority_signal: |
+    Able to identify when a prompt-level fix is the wrong abstraction.
+    Willing to accept worse UX for better correctness. Thinks in
+    pipelines, not single calls.
+  caveats: |
+    Solo project. Not scaled to many users. No formal evals yet,
+    "near zero" is qualitative.
+  linked_artifacts: []
+  # TODO: write a blog post about the two-pipeline architecture.
+  # TODO: create a diagram showing the routing layer splitting
+  # etymology vs narrative queries. This visual is compelling
+  # and interviewers will remember it.
+
+  # Avandar LLM
+  - id: avandar_llm_plain_language_query
+  title: Building an LLM plain-language query layer over a DuckDB analytics engine
+  context: |
+    Avandar Labs, following the DuckDB-WASM migration. The analytics
+    system now ran fast but still required users to write SQL (or use
+    a faceted UI). Non-technical PMs and customer-facing staff could
+    not self-serve.
+  problem: |
+    The SQL-or-facets dichotomy was limiting. Facets covered 30% of
+    real questions. SQL covered 100% but excluded 80% of users. The
+    long tail of "I want to ask a question that's not in the facets"
+    was going to engineers as one-off tickets.
+  constraints: |
+    Had to layer on top of the existing DuckDB pipeline, not replace
+    it. Had to be safe against SQL injection and resource exhaustion
+    because LLM-generated SQL is famously dangerous. Limited team
+    time and no formal eval infrastructure.
+  approach: |
+    Built a translation layer that took plain-language questions,
+    passed them to an LLM with the schema + a few example
+    question/SQL pairs in context, generated SQL, validated the SQL
+    against a safelist (no DROP, LIMIT-injection, column-exists
+    checks), then executed against DuckDB. Returned both the result
+    and the generated SQL so users could verify and learn.
+  outcome: |
+    FILL THIS IN. My guess: internal users started self-serving
+    analytical questions without engineering help. Engineers stopped
+    getting ad-hoc SQL tickets. The "show the generated SQL" feature
+    was unexpectedly popular and educational for users.
+  what_i_learned: |
+    LLM-generated code is safe if you treat
+    the LLM as untrusted input and validate against a whitelist, not
+    a blacklist.
+  technologies:
+    - duckdb
+    - llm
+    - sql
+    - typescript
+    - react
+  themes:
+    - llm-in-production
+    - query-interfaces
+    - self-service-analytics
+    - ai-safety-validation
+  transferable_to: |
+    Any data product that wants natural language querying. Hot area
+    right now. Hex, Observable, Tinybird, and any analytics company
+    building "ask in plain English" features.
+  seniority_signal: |
+    Willing to ship LLM features into production with proper
+    validation. Not the person who says "LLMs are unreliable so we
+    shouldn't use them," not the person who says "LLMs are magic so
+    we should use them everywhere."
+  caveats: |
+    Production usage volume I'm aware of was small. I did not build
+    the guardrails against prompt injection at the input layer, only
+    SQL validation at the output layer. That's a real gap.
+  linked_artifacts: []
+  # TODO: consider a writeup after verifying nothing is proprietary.
+  # The "show generated SQL" transparency pattern is a strong
+  # blog post angle on its own.

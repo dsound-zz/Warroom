@@ -1,1 +1,122 @@
-[]
+[
+    {
+        "name": "Cursor",
+        "url": "https://cursor.com/careers"
+    },
+    {
+        "name": "Together AI",
+        "url": "https://www.together.ai/careers"
+    },
+    {
+        "name": "Hex",
+        "url": "https://hex.tech/careers"
+    },
+    {
+        "name": "Observable",
+        "url": "https://observablehq.com/about#careers"
+    },
+    {
+        "name": "Tinybird",
+        "url": "https://www.tinybird.co/careers"
+    },
+    {
+        "name": "Sourcegraph",
+        "url": "https://sourcegraph.com/careers"
+    },
+    {
+        "name": "Langfuse",
+        "url": "https://langfuse.com/careers"
+    },
+    {
+        "name": "Resend",
+        "url": "https://resend.com/careers"
+    },
+    {
+        "name": "Trigger.dev",
+        "url": "https://trigger.dev/careers"
+    },
+    {
+        "name": "Convex",
+        "url": "https://www.convex.dev/careers"
+    },
+    {
+        "name": "Liveblocks",
+        "url": "https://liveblocks.io/careers"
+    },
+    {
+        "name": "Sanity",
+        "url": "https://www.sanity.io/careers"
+    },
+    {
+        "name": "Payload",
+        "url": "https://payloadcms.com/careers"
+    },
+    {
+        "name": "Expo",
+        "url": "https://expo.dev/careers"
+    },
+    {
+        "name": "Mintlify",
+        "url": "https://mintlify.com/careers"
+    },
+    {
+        "name": "Railway",
+        "url": "https://railway.app/careers"
+    },
+    {
+        "name": "Fly.io",
+        "url": "https://fly.io/jobs"
+    },
+    {
+        "name": "Sentry",
+        "url": "https://sentry.io/careers"
+    },
+    {
+        "name": "Honeycomb",
+        "url": "https://www.honeycomb.io/careers"
+    },
+    {
+        "name": "Livekit",
+        "url": "https://livekit.io/careers"
+    },
+    {
+        "name": "Cal.com",
+        "url": "https://cal.com/jobs"
+    },
+    {
+        "name": "Coda",
+        "url": "https://coda.io/careers"
+    },
+    {
+        "name": "Attio",
+        "url": "https://attio.com/careers"
+    },
+    {
+        "name": "Groq",
+        "url": "https://groq.com/careers"
+    },
+    {
+        "name": "Infisical",
+        "url": "https://infisical.com/careers"
+    },
+    {
+        "name": "Upstash",
+        "url": "https://upstash.com/careers"
+    },
+    {
+        "name": "Dagster",
+        "url": "https://dagster.io/careers"
+    },
+    {
+        "name": "Lightdash",
+        "url": "https://www.lightdash.com/careers"
+    },
+    {
+        "name": "Helicone",
+        "url": "https://www.helicone.ai/careers"
+    },
+    {
+        "name": "Codeium",
+        "url": "https://codeium.com/careers"
+    }
+]

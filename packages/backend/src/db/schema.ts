@@ -38,6 +38,7 @@ export const signals = pgTable('signals', {
   ingestedAt: timestamp('ingested_at', { withTimezone: true }).notNull().defaultNow(),
   actedOn: boolean('acted_on').notNull().default(false),
   dismissed: boolean('dismissed').notNull().default(false),
+  rawPayload: jsonb('raw_payload').$type<Record<string, unknown>>().notNull().default({}),
   // Phase 3 fields — nullable for now
   relevanceScore: real('relevance_score'),
   tags: text('tags').array(),
@@ -101,11 +102,66 @@ export const dna = pgTable('dna', {
 });
 
 // ---------------------------------------------------------------------------
+// do_not_apply
+// ---------------------------------------------------------------------------
+export const doNotApply = pgTable('do_not_apply', {
+  id: serial('id').primaryKey(),
+  companyId: integer('company_id')
+    .notNull()
+    .references(() => companies.id, { onDelete: 'cascade' })
+    .unique(),
+  reasonCategory: text('reason_category').notNull(),
+  reasonNotes: text('reason_notes'),
+  blockType: text('block_type').notNull().default('hard'),
+  reconsiderAt: timestamp('reconsider_at', { withTimezone: true }),
+  addedAt: timestamp('added_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
+// ---------------------------------------------------------------------------
+// contacts
+// ---------------------------------------------------------------------------
+export const contacts = pgTable('contacts', {
+  id: serial('id').primaryKey(),
+  companyId: integer('company_id')
+    .notNull()
+    .references(() => companies.id, { onDelete: 'cascade' }),
+  name: text('name').notNull(),
+  title: text('title'),
+  linkedinUrl: text('linkedin_url'),
+  email: text('email'),
+  twitterHandle: text('twitter_handle'),
+  relationship: text('relationship').notNull().default('cold'),
+  lastTouchedAt: timestamp('last_touched_at', { withTimezone: true }),
+  notes: text('notes'),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
+// ---------------------------------------------------------------------------
+// interview_notes
+// ---------------------------------------------------------------------------
+export const interviewNotes = pgTable('interview_notes', {
+  id: serial('id').primaryKey(),
+  applicationId: integer('application_id')
+    .notNull()
+    .references(() => applications.id, { onDelete: 'cascade' }),
+  stage: text('stage').notNull(),
+  scheduledAt: timestamp('scheduled_at', { withTimezone: true }),
+  prepNotes: text('prep_notes'),
+  postMortem: text('post_mortem'),
+  whatWentWell: text('what_went_well'),
+  whatWentPoorly: text('what_went_poorly'),
+  lessons: text('lessons'),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
+// ---------------------------------------------------------------------------
 // Relations
 // ---------------------------------------------------------------------------
 export const companiesRelations = relations(companies, ({ many }) => ({
   signals: many(signals),
   applications: many(applications),
+  doNotApply: many(doNotApply),
+  contacts: many(contacts),
 }));
 
 export const signalsRelations = relations(signals, ({ one }) => ({
@@ -121,6 +177,7 @@ export const applicationsRelations = relations(applications, ({ one, many }) => 
     references: [companies.id],
   }),
   stageEvents: many(stageEvents),
+  interviewNotes: many(interviewNotes),
 }));
 
 export const stageEventsRelations = relations(stageEvents, ({ one }) => ({
@@ -129,3 +186,25 @@ export const stageEventsRelations = relations(stageEvents, ({ one }) => ({
     references: [applications.id],
   }),
 }));
+
+export const doNotApplyRelations = relations(doNotApply, ({ one }) => ({
+  company: one(companies, {
+    fields: [doNotApply.companyId],
+    references: [companies.id],
+  }),
+}));
+
+export const contactsRelations = relations(contacts, ({ one }) => ({
+  company: one(companies, {
+    fields: [contacts.companyId],
+    references: [companies.id],
+  }),
+}));
+
+export const interviewNotesRelations = relations(interviewNotes, ({ one }) => ({
+  application: one(applications, {
+    fields: [interviewNotes.applicationId],
+    references: [applications.id],
+  }),
+}));
+

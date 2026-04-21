@@ -21,6 +21,11 @@ export function SignalCard({ signal, onAct, onDismiss }: SignalCardProps) {
           <span className="text-xs bg-bg border border-border rounded px-2 py-0.5 text-muted uppercase tracking-wide">
             {signal.source}
           </span>
+          {signal.isDna && (
+            <span className="text-xs bg-danger/20 text-danger border border-danger/30 rounded px-2 py-0.5">
+              DNA
+            </span>
+          )}
           {signal.actedOn && (
             <span className="text-xs bg-accent/20 text-accent rounded px-2 py-0.5">Acted</span>
           )}

@@ -13,6 +13,7 @@ export const SignalSchema = z.object({
   actedOn: z.boolean(),
   dismissed: z.boolean(),
   company: CompanyBriefSchema.nullable(),
+  isDna: z.boolean().default(false),
 });
 export type Signal = z.infer<typeof SignalSchema>;
 

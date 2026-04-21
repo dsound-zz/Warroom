@@ -1,9 +1,9 @@
 import { Hono } from 'hono';
 import { zValidator } from '@hono/zod-validator';
-import { eq, and, gte, lte, desc, sql } from 'drizzle-orm';
+import { eq, and, gte, lte, desc, sql, inArray } from 'drizzle-orm';
 import { HTTPException } from 'hono/http-exception';
 import { db } from '../db/index.js';
-import { signals, companies } from '../db/schema.js';
+import { signals, companies, doNotApply } from '../db/schema.js';
 import { logger } from '../logger.js';
 import { SignalsListQuerySchema, type Signal } from '@warroom/shared';
 
@@ -41,7 +41,7 @@ type Row = typeof COLS extends Record<string, unknown>
     }
   : never;
 
-function mapRow(row: Row): Signal {
+function mapRow(row: Row, isDna = false): Signal {
   return {
     id: row.id,
     source: row.source,
@@ -57,6 +57,7 @@ function mapRow(row: Row): Signal {
       row.companyDbId !== null && row.companyName !== null
         ? { id: row.companyDbId, name: row.companyName }
         : null,
+    isDna,
   };
 }
 
@@ -102,8 +103,26 @@ signalsRouter.get('/', zValidator('query', SignalsListQuerySchema), async (c) =>
       .from(signals)
       .where(where);
 
+    // Build DNA set for enrichment
+    const companyIds = [
+      ...new Set(
+        rows.map((r) => (r as Row).companyId).filter((id): id is number => id !== null),
+      ),
+    ];
+    let dnaSet = new Set<number>();
+    if (companyIds.length > 0) {
+      const dnaRows = await db
+        .select({ companyId: doNotApply.companyId })
+        .from(doNotApply)
+        .where(inArray(doNotApply.companyId, companyIds));
+      dnaSet = new Set(dnaRows.map((r) => r.companyId));
+    }
+
     return c.json({
-      items: rows.map((r) => mapRow(r as Row)),
+      items: rows.map((r) => {
+        const typed = r as Row;
+        return mapRow(typed, typed.companyId !== null && dnaSet.has(typed.companyId));
+      }),
       total: countRow?.count ?? 0,
       limit: q.limit,
       offset: q.offset,
