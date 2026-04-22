@@ -1,11 +1,16 @@
 import { Hono } from 'hono';
 import { zValidator } from '@hono/zod-validator';
-import { eq, and, gte, lte, desc, sql, inArray } from 'drizzle-orm';
+import { eq, and, gte, lte, desc, sql, inArray, or, ilike } from 'drizzle-orm';
 import { HTTPException } from 'hono/http-exception';
 import { db } from '../db/index.js';
-import { signals, companies, doNotApply } from '../db/schema.js';
+import { signals, companies, doNotApply, signalActions } from '../db/schema.js';
 import { logger } from '../logger.js';
-import { SignalsListQuerySchema, type Signal } from '@warroom/shared';
+import {
+  SignalsListQuerySchema,
+  CreateSignalActionSchema,
+  type Signal,
+  type SignalAction,
+} from '@warroom/shared';
 
 export const signalsRouter = new Hono();
 
@@ -58,6 +63,17 @@ function mapRow(row: Row, isDna = false): Signal {
         ? { id: row.companyDbId, name: row.companyName }
         : null,
     isDna,
+    actions: [], // Filled correctly below
+  };
+}
+
+function mapAction(row: typeof signalActions.$inferSelect): SignalAction {
+  return {
+    id: row.id,
+    signalId: row.signalId,
+    actionType: row.actionType as SignalAction['actionType'],
+    note: row.note,
+    createdAt: row.createdAt.toISOString(),
   };
 }
 
@@ -70,7 +86,23 @@ async function getSignalById(id: number): Promise<Signal> {
     .limit(1);
   const row = rows[0];
   if (!row) throw new HTTPException(404, { message: 'Signal not found' });
-  return mapRow(row as Row);
+  const signal = mapRow(row as Row);
+
+  const actionsResult = await db.select().from(signalActions).where(eq(signalActions.signalId, id)).orderBy(desc(signalActions.createdAt));
+  signal.actions = actionsResult.map(mapAction);
+
+  return signal;
+}
+
+function buildSearchFilter(search: string) {
+  const terms = search.split(/ OR /i).map((t) => t.trim()).filter(Boolean);
+  return or(
+    ...terms.flatMap((term) => [
+      ilike(signals.title, `%${term}%`),
+      ilike(signals.snippet, `%${term}%`),
+      ilike(companies.name, `%${term}%`),
+    ]),
+  );
 }
 
 signalsRouter.get('/', zValidator('query', SignalsListQuerySchema), async (c) => {
@@ -86,6 +118,7 @@ signalsRouter.get('/', zValidator('query', SignalsListQuerySchema), async (c) =>
     q.source !== undefined ? eq(signals.source, q.source) : undefined,
     !q.includeActed ? eq(signals.actedOn, false) : undefined,
     !q.includeDismissed ? eq(signals.dismissed, false) : undefined,
+    q.search ? buildSearchFilter(q.search) : undefined,
   );
 
   try {
@@ -101,6 +134,7 @@ signalsRouter.get('/', zValidator('query', SignalsListQuerySchema), async (c) =>
     const [countRow] = await db
       .select({ count: sql<number>`count(*)::int` })
       .from(signals)
+      .leftJoin(companies, eq(signals.companyId, companies.id))
       .where(where);
 
     // Build DNA set for enrichment
@@ -118,10 +152,32 @@ signalsRouter.get('/', zValidator('query', SignalsListQuerySchema), async (c) =>
       dnaSet = new Set(dnaRows.map((r) => r.companyId));
     }
 
+    const signalIds = rows.map((r) => (r as Row).id);
+    let actionsBySignalId: Record<number, SignalAction[]> = {};
+
+    if (signalIds.length > 0) {
+      const actionsRows = await db
+        .select()
+        .from(signalActions)
+        .where(inArray(signalActions.signalId, signalIds))
+        .orderBy(desc(signalActions.createdAt));
+
+      for (const ar of actionsRows) {
+        if (ar.signalId !== null) {
+          if (!actionsBySignalId[ar.signalId]) {
+            actionsBySignalId[ar.signalId] = [];
+          }
+          actionsBySignalId[ar.signalId]!.push(mapAction(ar));
+        }
+      }
+    }
+
     return c.json({
       items: rows.map((r) => {
         const typed = r as Row;
-        return mapRow(typed, typed.companyId !== null && dnaSet.has(typed.companyId));
+        const mapped = mapRow(typed, typed.companyId !== null && dnaSet.has(typed.companyId));
+        mapped.actions = actionsBySignalId[mapped.id] || [];
+        return mapped;
       }),
       total: countRow?.count ?? 0,
       limit: q.limit,
@@ -133,18 +189,53 @@ signalsRouter.get('/', zValidator('query', SignalsListQuerySchema), async (c) =>
   }
 });
 
+signalsRouter.post(
+  '/:id/action',
+  zValidator('json', CreateSignalActionSchema),
+  async (c) => {
+    const id = Number(c.req.param('id'));
+    if (!Number.isInteger(id) || id < 1) return c.json({ error: 'Invalid id' }, 400);
+
+    const body = c.req.valid('json');
+
+    try {
+      await db.transaction(async (tx) => {
+        await tx.insert(signalActions).values({
+          signalId: id,
+          actionType: body.actionType,
+          note: body.note ?? null,
+        });
+        await tx
+          .update(signals)
+          .set({ actedOn: true })
+          .where(eq(signals.id, id));
+      });
+
+      return c.json(await getSignalById(id));
+    } catch (err) {
+      logger.error({ err }, 'signals action error');
+      throw new HTTPException(500, { message: 'Internal server error' });
+    }
+  },
+);
+
 signalsRouter.post('/:id/act', async (c) => {
   const id = Number(c.req.param('id'));
   if (!Number.isInteger(id) || id < 1) return c.json({ error: 'Invalid id' }, 400);
 
   try {
-    const updated = await db
-      .update(signals)
-      .set({ actedOn: true })
-      .where(eq(signals.id, id))
-      .returning({ id: signals.id });
+    await db.transaction(async (tx) => {
+      await tx.insert(signalActions).values({
+        signalId: id,
+        actionType: 'saved',
+        note: null,
+      });
+      await tx
+        .update(signals)
+        .set({ actedOn: true })
+        .where(eq(signals.id, id));
+    });
 
-    if (updated.length === 0) return c.json({ error: 'Not found' }, 404);
     return c.json(await getSignalById(id));
   } catch (err) {
     if (err instanceof HTTPException) throw err;
@@ -172,3 +263,4 @@ signalsRouter.post('/:id/dismiss', async (c) => {
     throw new HTTPException(500, { message: 'Internal server error' });
   }
 });
+

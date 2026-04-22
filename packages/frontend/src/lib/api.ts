@@ -9,6 +9,7 @@ import {
   type CompanyListResponse,
   type DoNotApply,
   type CreateDoNotApply,
+  type CreateSignalAction,
 } from '@warroom/shared';
 
 const BASE = '/api';
@@ -55,6 +56,17 @@ export async function dismissSignal(id: number): Promise<Signal> {
   return SignalSchema.parse(raw);
 }
 
+export async function addSignalAction(
+  signalId: number,
+  body: CreateSignalAction
+): Promise<Signal> {
+  const raw = await apiPost<unknown>(
+    `/signals/${signalId}/action`,
+    body
+  );
+  return SignalSchema.parse(raw);
+}
+
 export async function fetchCompanies(
   params: { search?: string; limit?: number; offset?: number } = {},
 ): Promise<CompanyListResponse> {
@@ -67,7 +79,7 @@ export async function fetchCompanies(
 }
 
 export async function fetchDoNotApply(): Promise<{ items: DoNotApply[]; total: number }> {
-  const raw = await apiGet<{ items: unknown[]; total: number }>('/do-not-apply?limit=200');
+  const raw = await apiGet<{ items: unknown[]; total: number }>('/do-not-apply?limit=5000');
   return { items: raw.items.map((i) => DoNotApplySchema.parse(i)), total: raw.total };
 }
 

@@ -13,8 +13,20 @@ export {
   SignalSchema,
   SignalsListQuerySchema,
   SignalsListResponseSchema,
+  SIGNAL_ACTION_TYPES,
+  SignalActionTypeSchema,
+  SIGNAL_ACTION_LABELS,
+  SignalActionSchema,
+  CreateSignalActionSchema,
 } from './signals.js';
-export type { Signal, SignalsListQuery, SignalsListResponse } from './signals.js';
+export type { 
+  Signal, 
+  SignalsListQuery, 
+  SignalsListResponse,
+  SignalActionType,
+  SignalAction,
+  CreateSignalAction
+} from './signals.js';
 
 // Companies
 export {

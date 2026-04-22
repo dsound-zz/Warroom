@@ -11,7 +11,7 @@ import { CreateDoNotApplySchema, QuickAddDoNotApplySchema } from '@warroom/share
 export const doNotApplyRouter = new Hono();
 
 const listQuerySchema = z.object({
-  limit: z.coerce.number().int().min(1).max(200).default(50),
+  limit: z.coerce.number().int().min(1).max(5000).default(50),
   offset: z.coerce.number().int().min(0).default(0),
   blockType: z.enum(['hard', 'soft']).optional(),
   includeExpired: z.coerce.boolean().default(false),
@@ -77,10 +77,10 @@ doNotApplyRouter.get('/', zValidator('query', listQuerySchema), async (c) => {
     blockType !== undefined ? eq(doNotApply.blockType, blockType) : undefined,
     !includeExpired
       ? or(
-          eq(doNotApply.blockType, 'hard'),
-          isNull(doNotApply.reconsiderAt),
-          gt(doNotApply.reconsiderAt, now),
-        )
+        eq(doNotApply.blockType, 'hard'),
+        isNull(doNotApply.reconsiderAt),
+        gt(doNotApply.reconsiderAt, now),
+      )
       : undefined,
   );
 

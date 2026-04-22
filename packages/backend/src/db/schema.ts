@@ -45,6 +45,20 @@ export const signals = pgTable('signals', {
 });
 
 // ---------------------------------------------------------------------------
+// signal_actions
+// ---------------------------------------------------------------------------
+export const signalActions = pgTable('signal_actions', {
+  id: serial('id').primaryKey(),
+  signalId: integer('signal_id')
+    .notNull()
+    .references(() => signals.id, { onDelete: 'cascade' }),
+  actionType: text('action_type').notNull(),
+  note: text('note'),
+  createdAt: timestamp('created_at', { withTimezone: true })
+    .notNull().defaultNow(),
+});
+
+// ---------------------------------------------------------------------------
 // applications
 // ---------------------------------------------------------------------------
 export const applications = pgTable('applications', {
@@ -164,10 +178,18 @@ export const companiesRelations = relations(companies, ({ many }) => ({
   contacts: many(contacts),
 }));
 
-export const signalsRelations = relations(signals, ({ one }) => ({
+export const signalsRelations = relations(signals, ({ one, many }) => ({
   company: one(companies, {
     fields: [signals.companyId],
     references: [companies.id],
+  }),
+  actions: many(signalActions),
+}));
+
+export const signalActionsRelations = relations(signalActions, ({ one }) => ({
+  signal: one(signals, {
+    fields: [signalActions.signalId],
+    references: [signals.id],
   }),
 }));
 
