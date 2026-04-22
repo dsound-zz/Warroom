@@ -1,6 +1,13 @@
 import { useState } from 'react';
 import { formatDistanceToNow, format } from 'date-fns';
-import { SIGNAL_ACTION_LABELS, type Signal, type SignalActionType, type CreateSignalAction } from '@warroom/shared';
+import {
+  SIGNAL_STATUS_TAGS,
+  SIGNAL_STATUS_LABELS,
+  type Signal,
+  type SignalStatusTag,
+  type SignalContact,
+  type CreateSignalAction,
+} from '@warroom/shared';
 
 interface SignalCardProps {
   signal: Signal;
@@ -8,44 +15,80 @@ interface SignalCardProps {
   onAction: (id: number, action: CreateSignalAction) => void;
 }
 
-const ACTION_PILLS: SignalActionType[] = [
-  'saved', 'emailed', 'applied', 'reached_out', 'scheduled_interview', 'not_relevant', 'dead_link'
-];
-
-function getBadgeProps(actionType: string) {
-  switch (actionType) {
-    case 'saved': return { label: 'Saved', classes: 'bg-accent/10 text-accent' };
-    case 'emailed': return { label: 'Emailed', classes: 'bg-success/10 text-success' };
-    case 'applied': return { label: 'Applied', classes: 'bg-success/20 text-success font-medium' };
-    case 'reached_out': return { label: 'Reached out', classes: 'bg-accent/10 text-accent' };
-    case 'scheduled_interview': return { label: 'Interview', classes: 'bg-success/20 text-success font-medium' };
-    case 'not_relevant': return { label: 'Not relevant', classes: 'bg-muted/10 text-muted' };
-    case 'dead_link': return { label: 'Dead link', classes: 'bg-danger/10 text-danger' };
-    default: return { label: actionType, classes: 'bg-muted/10 text-muted' };
+function getTagBadgeClasses(tag: SignalStatusTag): string {
+  switch (tag) {
+    case 'applied':      return 'bg-success/20 text-success';
+    case 'contacted':    return 'bg-accent/20 text-accent';
+    case 'wrong_stack':  return 'bg-muted/20 text-muted';
+    case 'dead_link':    return 'bg-danger/10 text-danger';
+    case 'dna':          return 'bg-danger/20 text-danger';
+    case 'ignored':      return 'bg-muted/20 text-muted opacity-60';
+    case 'saved':        return 'bg-accent/10 text-accent';
+    case 'interviewing': return 'bg-success/30 text-success font-bold';
+    case 'not_relevant': return 'bg-muted/20 text-muted opacity-60';
+    default:             return 'bg-muted/10 text-muted';
   }
 }
 
+const CHANNEL_OPTIONS: SignalContact['channel'][] = ['email', 'linkedin', 'twitter', 'other'];
+
 export function SignalCard({ signal, onDismiss, onAction }: SignalCardProps) {
   const ago = formatDistanceToNow(new Date(signal.detectedAt), { addSuffix: true });
+  const la = signal.latestAction;
+
   const [panelOpen, setPanelOpen] = useState(false);
-  const [selectedAction, setSelectedAction] = useState<SignalActionType | null>(null);
+  const [selectedTags, setSelectedTags] = useState<Set<SignalStatusTag>>(new Set());
+  const [contactName, setContactName] = useState('');
+  const [contactChannel, setContactChannel] = useState<SignalContact['channel']>('email');
+  const [contactDetail, setContactDetail] = useState('');
   const [note, setNote] = useState('');
 
-  const mostRecentAction = signal.actions && signal.actions.length > 0 ? signal.actions[0] : null;
-  const isDimmed = mostRecentAction && ['not_relevant', 'dead_link'].includes(mostRecentAction.actionType);
+  const dimTags: SignalStatusTag[] = ['ignored', 'dead_link', 'wrong_stack', 'dna', 'not_relevant'];
+  const isDimmed = la?.statusTags.some((t) => dimTags.includes(t)) ?? false;
+
+  const openPanel = () => {
+    if (la) {
+      setSelectedTags(new Set(la.statusTags));
+      setContactName(la.contact?.name ?? '');
+      setContactChannel(la.contact?.channel ?? 'email');
+      setContactDetail(la.contact?.detail ?? '');
+      setNote(la.note ?? '');
+    } else {
+      setSelectedTags(new Set());
+      setContactName('');
+      setContactChannel('email');
+      setContactDetail('');
+      setNote('');
+    }
+    setPanelOpen(true);
+  };
+
+  const toggleTag = (tag: SignalStatusTag) => {
+    setSelectedTags((prev) => {
+      const next = new Set(prev);
+      if (next.has(tag)) next.delete(tag);
+      else next.add(tag);
+      return next;
+    });
+  };
 
   const handleSubmit = () => {
-    if (!selectedAction) return;
-    onAction(signal.id, { actionType: selectedAction, note: note.trim() || undefined });
+    const tags = Array.from(selectedTags);
+    if (tags.length === 0) return;
+    const hasContacted = selectedTags.has('contacted');
+    onAction(signal.id, {
+      statusTags: tags,
+      contact:
+        hasContacted && contactName.trim()
+          ? { name: contactName.trim(), channel: contactChannel, detail: contactDetail.trim() || undefined }
+          : null,
+      note: note.trim() || null,
+    });
     setPanelOpen(false);
-    setSelectedAction(null);
-    setNote('');
   };
 
   const handleCancel = () => {
     setPanelOpen(false);
-    setSelectedAction(null);
-    setNote('');
   };
 
   return (
@@ -54,6 +97,7 @@ export function SignalCard({ signal, onDismiss, onAction }: SignalCardProps) {
         isDimmed ? 'opacity-50' : ''
       }`}
     >
+      {/* Header row */}
       <div className="flex items-center justify-between mb-2">
         <div className="flex items-center gap-2 flex-wrap">
           <span className="text-xs bg-bg border border-border rounded px-2 py-0.5 text-muted uppercase tracking-wide">
@@ -64,18 +108,16 @@ export function SignalCard({ signal, onDismiss, onAction }: SignalCardProps) {
               DNA
             </span>
           )}
-          {signal.actions?.map((act) => {
-            const props = getBadgeProps(act.actionType);
-            return (
-              <span key={act.id} className={`text-xs px-2 py-0.5 rounded ${props.classes}`}>
-                {props.label}
-              </span>
-            );
-          })}
+          {la?.statusTags.map((tag) => (
+            <span key={tag} className={`text-xs px-2 py-0.5 rounded ${getTagBadgeClasses(tag)}`}>
+              {SIGNAL_STATUS_LABELS[tag]}
+            </span>
+          ))}
         </div>
         <span className="text-xs text-muted">{ago}</span>
       </div>
 
+      {/* Title */}
       <div className="mb-1">
         {signal.url ? (
           <a
@@ -91,13 +133,20 @@ export function SignalCard({ signal, onDismiss, onAction }: SignalCardProps) {
         )}
       </div>
 
+      {/* Company + contact + note */}
       {signal.company && (
         <div className="mb-1">
           <p className="text-sm text-muted">{signal.company.name}</p>
-          {mostRecentAction?.note && (
-             <p className="text-xs text-muted mt-0.5">
-               {format(new Date(mostRecentAction.createdAt), 'MMM d')} - {mostRecentAction.note}
-             </p>
+          {la?.contact && (
+            <p className="text-xs text-muted mt-0.5">
+              Contacted: {la.contact.name} via {la.contact.channel}
+              {la.contact.detail ? ` (${la.contact.detail})` : ''}
+            </p>
+          )}
+          {la?.note && (
+            <p className="text-xs text-muted mt-0.5">
+              {format(new Date(la.createdAt), 'MMM d')} — {la.note}
+            </p>
           )}
         </div>
       )}
@@ -106,12 +155,13 @@ export function SignalCard({ signal, onDismiss, onAction }: SignalCardProps) {
         <p className="text-sm text-muted line-clamp-2 mb-3 mt-2">{signal.extractedSummary}</p>
       )}
 
+      {/* Action bar */}
       <div className="flex gap-2 mt-3">
         <button
-          onClick={() => setPanelOpen((prev) => !prev)}
+          onClick={openPanel}
           className="text-xs px-3 py-1 rounded border border-accent text-accent hover:bg-accent/10 transition-colors"
         >
-          Take action
+          {la ? 'Update' : 'Take action'}
         </button>
         <button
           onClick={() => onDismiss(signal.id)}
@@ -122,37 +172,73 @@ export function SignalCard({ signal, onDismiss, onAction }: SignalCardProps) {
         </button>
       </div>
 
+      {/* Expanded action panel */}
       {panelOpen && (
         <div className="mt-3 p-3 bg-bg border border-border rounded flex flex-col gap-3">
+          {/* Status tag pills */}
           <div className="flex flex-wrap gap-2">
-            {ACTION_PILLS.map((type) => (
+            {SIGNAL_STATUS_TAGS.map((tag) => (
               <button
-                key={type}
-                onClick={() => setSelectedAction(type)}
+                key={tag}
+                onClick={() => toggleTag(tag)}
                 className={`text-xs px-2 py-1 rounded border transition-colors ${
-                  selectedAction === type
+                  selectedTags.has(tag)
                     ? 'bg-accent/10 border-accent text-accent'
                     : 'border-border text-muted hover:border-accent hover:text-accent'
                 }`}
               >
-                {SIGNAL_ACTION_LABELS[type]}
+                {SIGNAL_STATUS_LABELS[tag]}
               </button>
             ))}
           </div>
+
+          {/* Contact fields — shown only when "contacted" is selected */}
+          {selectedTags.has('contacted') && (
+            <div className="flex gap-2 flex-wrap">
+              <input
+                type="text"
+                placeholder="Contact name"
+                value={contactName}
+                onChange={(e) => setContactName(e.target.value)}
+                className="flex-1 min-w-32 bg-surface border border-border rounded px-3 py-1.5 text-sm text-foreground focus:outline-none focus:border-accent"
+              />
+              <select
+                value={contactChannel}
+                onChange={(e) => setContactChannel(e.target.value as SignalContact['channel'])}
+                className="bg-surface border border-border rounded px-3 py-1.5 text-sm text-foreground focus:outline-none focus:border-accent"
+              >
+                {CHANNEL_OPTIONS.map((ch) => (
+                  <option key={ch} value={ch}>
+                    {ch.charAt(0).toUpperCase() + ch.slice(1)}
+                  </option>
+                ))}
+              </select>
+              <input
+                type="text"
+                placeholder="email or URL"
+                value={contactDetail}
+                onChange={(e) => setContactDetail(e.target.value)}
+                className="flex-1 min-w-32 bg-surface border border-border rounded px-3 py-1.5 text-sm text-foreground focus:outline-none focus:border-accent"
+              />
+            </div>
+          )}
+
+          {/* Note field */}
           <input
             type="text"
-            placeholder="Add a note (optional)..."
+            placeholder="Add a comment..."
             value={note}
             onChange={(e) => setNote(e.target.value)}
             className="w-full bg-surface border border-border rounded px-3 py-2 text-sm text-foreground focus:outline-none focus:border-accent"
           />
+
           <div className="flex gap-2">
             <button
               onClick={handleSubmit}
-              disabled={!selectedAction}
+              disabled={selectedTags.size === 0}
               className="px-3 py-1 text-xs rounded bg-accent text-accent-foreground hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              Submit
+              Save
             </button>
             <button
               onClick={handleCancel}

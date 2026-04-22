@@ -52,7 +52,10 @@ export const signalActions = pgTable('signal_actions', {
   signalId: integer('signal_id')
     .notNull()
     .references(() => signals.id, { onDelete: 'cascade' }),
-  actionType: text('action_type').notNull(),
+  statusTags: text('status_tags').array().notNull(),
+  contactName: text('contact_name'),
+  contactChannel: text('contact_channel'),
+  contactDetail: text('contact_detail'),
   note: text('note'),
   createdAt: timestamp('created_at', { withTimezone: true })
     .notNull().defaultNow(),

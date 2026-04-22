@@ -1,39 +1,52 @@
 import { z } from 'zod';
 import { CompanyBriefSchema } from './companies.js';
 
-export const SIGNAL_ACTION_TYPES = [
-  'saved',
-  'emailed',
+export const SIGNAL_STATUS_TAGS = [
   'applied',
-  'reached_out',
-  'scheduled_interview',
-  'not_relevant',
+  'contacted',
+  'wrong_stack',
   'dead_link',
+  'dna',
+  'ignored',
+  'saved',
+  'interviewing',
+  'not_relevant',
 ] as const;
-export type SignalActionType = typeof SIGNAL_ACTION_TYPES[number];
-export const SignalActionTypeSchema = z.enum(SIGNAL_ACTION_TYPES);
+export type SignalStatusTag = typeof SIGNAL_STATUS_TAGS[number];
+export const SignalStatusTagSchema = z.enum(SIGNAL_STATUS_TAGS);
 
-export const SIGNAL_ACTION_LABELS: Record<SignalActionType, string> = {
-  saved: 'Saved for later',
-  emailed: 'Emailed contact',
+export const SIGNAL_STATUS_LABELS: Record<SignalStatusTag, string> = {
   applied: 'Applied',
-  reached_out: 'Reached out (LinkedIn, etc.)',
-  scheduled_interview: 'Scheduled interview',
-  not_relevant: 'Not relevant',
+  contacted: 'Contacted',
+  wrong_stack: 'Wrong stack',
   dead_link: 'Dead link',
+  dna: 'Add to DNA',
+  ignored: 'Ignored',
+  saved: 'Saved',
+  interviewing: 'Interviewing',
+  not_relevant: 'Not relevant',
 };
+
+export const SignalContactSchema = z.object({
+  name: z.string().min(1),
+  channel: z.enum(['email', 'linkedin', 'twitter', 'other']).default('email'),
+  detail: z.string().optional(),
+});
+export type SignalContact = z.infer<typeof SignalContactSchema>;
 
 export const SignalActionSchema = z.object({
   id: z.number().int(),
   signalId: z.number().int(),
-  actionType: SignalActionTypeSchema,
+  statusTags: z.array(SignalStatusTagSchema),
+  contact: SignalContactSchema.nullable(),
   note: z.string().nullable(),
   createdAt: z.string(),
 });
 export type SignalAction = z.infer<typeof SignalActionSchema>;
 
 export const CreateSignalActionSchema = z.object({
-  actionType: SignalActionTypeSchema,
+  statusTags: z.array(SignalStatusTagSchema).min(1),
+  contact: SignalContactSchema.nullable().optional(),
   note: z.string().nullable().optional(),
 });
 export type CreateSignalAction = z.infer<typeof CreateSignalActionSchema>;
@@ -51,7 +64,7 @@ export const SignalSchema = z.object({
   dismissed: z.boolean(),
   company: CompanyBriefSchema.nullable(),
   isDna: z.boolean().default(false),
-  actions: z.array(SignalActionSchema).default([]),
+  latestAction: SignalActionSchema.nullable().default(null),
 });
 export type Signal = z.infer<typeof SignalSchema>;
 

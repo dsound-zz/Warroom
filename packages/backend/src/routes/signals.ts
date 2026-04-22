@@ -10,6 +10,7 @@ import {
   CreateSignalActionSchema,
   type Signal,
   type SignalAction,
+  type SignalStatusTag,
 } from '@warroom/shared';
 
 export const signalsRouter = new Hono();
@@ -63,15 +64,25 @@ function mapRow(row: Row, isDna = false): Signal {
         ? { id: row.companyDbId, name: row.companyName }
         : null,
     isDna,
-    actions: [], // Filled correctly below
+    latestAction: null,
   };
 }
+
+
 
 function mapAction(row: typeof signalActions.$inferSelect): SignalAction {
   return {
     id: row.id,
     signalId: row.signalId,
-    actionType: row.actionType as SignalAction['actionType'],
+    statusTags: row.statusTags as SignalStatusTag[],
+    contact:
+      row.contactName
+        ? {
+            name: row.contactName,
+            channel: (row.contactChannel ?? 'email') as 'email' | 'linkedin' | 'twitter' | 'other',
+            detail: row.contactDetail ?? undefined,
+          }
+        : null,
     note: row.note,
     createdAt: row.createdAt.toISOString(),
   };
@@ -88,8 +99,13 @@ async function getSignalById(id: number): Promise<Signal> {
   if (!row) throw new HTTPException(404, { message: 'Signal not found' });
   const signal = mapRow(row as Row);
 
-  const actionsResult = await db.select().from(signalActions).where(eq(signalActions.signalId, id)).orderBy(desc(signalActions.createdAt));
-  signal.actions = actionsResult.map(mapAction);
+  const actionsResult = await db
+    .select()
+    .from(signalActions)
+    .where(eq(signalActions.signalId, id))
+    .orderBy(desc(signalActions.createdAt))
+    .limit(1);
+  signal.latestAction = actionsResult[0] ? mapAction(actionsResult[0]) : null;
 
   return signal;
 }
@@ -153,22 +169,18 @@ signalsRouter.get('/', zValidator('query', SignalsListQuerySchema), async (c) =>
     }
 
     const signalIds = rows.map((r) => (r as Row).id);
-    let actionsBySignalId: Record<number, SignalAction[]> = {};
+    const latestActionBySignalId: Record<number, SignalAction> = {};
 
     if (signalIds.length > 0) {
-      const actionsRows = await db
-        .select()
+      // DISTINCT ON to get only the most recent action per signal
+      const latestActionsResult = await db
+        .selectDistinctOn([signalActions.signalId])
         .from(signalActions)
         .where(inArray(signalActions.signalId, signalIds))
-        .orderBy(desc(signalActions.createdAt));
+        .orderBy(signalActions.signalId, desc(signalActions.createdAt));
 
-      for (const ar of actionsRows) {
-        if (ar.signalId !== null) {
-          if (!actionsBySignalId[ar.signalId]) {
-            actionsBySignalId[ar.signalId] = [];
-          }
-          actionsBySignalId[ar.signalId]!.push(mapAction(ar));
-        }
+      for (const ar of latestActionsResult) {
+        latestActionBySignalId[ar.signalId] = mapAction(ar);
       }
     }
 
@@ -176,7 +188,7 @@ signalsRouter.get('/', zValidator('query', SignalsListQuerySchema), async (c) =>
       items: rows.map((r) => {
         const typed = r as Row;
         const mapped = mapRow(typed, typed.companyId !== null && dnaSet.has(typed.companyId));
-        mapped.actions = actionsBySignalId[mapped.id] || [];
+        mapped.latestAction = latestActionBySignalId[mapped.id] ?? null;
         return mapped;
       }),
       total: countRow?.count ?? 0,
@@ -197,18 +209,35 @@ signalsRouter.post(
     if (!Number.isInteger(id) || id < 1) return c.json({ error: 'Invalid id' }, 400);
 
     const body = c.req.valid('json');
+    const contact = body.contact ?? null;
 
     try {
       await db.transaction(async (tx) => {
         await tx.insert(signalActions).values({
           signalId: id,
-          actionType: body.actionType,
+          statusTags: body.statusTags,
+          contactName: contact?.name ?? null,
+          contactChannel: contact?.channel ?? null,
+          contactDetail: contact?.detail ?? null,
           note: body.note ?? null,
         });
-        await tx
-          .update(signals)
-          .set({ actedOn: true })
-          .where(eq(signals.id, id));
+
+        await tx.update(signals).set({ actedOn: true }).where(eq(signals.id, id));
+
+        if (body.statusTags.includes('dna')) {
+          const signalRow = await tx
+            .select({ companyId: signals.companyId })
+            .from(signals)
+            .where(eq(signals.id, id))
+            .limit(1);
+          const companyId = signalRow[0]?.companyId;
+          if (companyId) {
+            await tx
+              .insert(doNotApply)
+              .values({ companyId, reasonCategory: 'other', blockType: 'hard' })
+              .onConflictDoNothing();
+          }
+        }
       });
 
       return c.json(await getSignalById(id));
@@ -227,7 +256,7 @@ signalsRouter.post('/:id/act', async (c) => {
     await db.transaction(async (tx) => {
       await tx.insert(signalActions).values({
         signalId: id,
-        actionType: 'saved',
+        statusTags: ['saved'],
         note: null,
       });
       await tx
@@ -263,4 +292,3 @@ signalsRouter.post('/:id/dismiss', async (c) => {
     throw new HTTPException(500, { message: 'Internal server error' });
   }
 });
-

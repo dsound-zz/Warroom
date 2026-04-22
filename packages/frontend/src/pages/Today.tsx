@@ -46,7 +46,8 @@ export function Today() {
   });
 
   const actionMutation = useMutation({
-    mutationFn: ({ id, body }: { id: number; body: any }) => addSignalAction(id, body),
+    mutationFn: ({ id, body }: { id: number; body: import('@warroom/shared').CreateSignalAction }) =>
+      addSignalAction(id, body),
     onMutate: async ({ id, body }) => {
       await qc.cancelQueries({ queryKey: QUERY_KEY });
       const snapshot = qc.getQueryData<SignalsListResponse>(QUERY_KEY);
@@ -56,16 +57,17 @@ export function Today() {
           ...prev,
           items: prev.items.map((s) => {
             if (s.id !== id) return s;
-            const newAction = {
-              id: Date.now(), // Optimistic ID
-              signalId: id,
-              actionType: body.actionType,
-              note: body.note,
-              createdAt: new Date().toISOString()
-            };
             return {
               ...s,
-              actions: [newAction, ...(s.actions || [])]
+              actedOn: true,
+              latestAction: {
+                id: Date.now(),
+                signalId: id,
+                statusTags: body.statusTags,
+                contact: body.contact ?? null,
+                note: body.note ?? null,
+                createdAt: new Date().toISOString(),
+              },
             };
           }),
         };

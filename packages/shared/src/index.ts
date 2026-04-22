@@ -13,19 +13,21 @@ export {
   SignalSchema,
   SignalsListQuerySchema,
   SignalsListResponseSchema,
-  SIGNAL_ACTION_TYPES,
-  SignalActionTypeSchema,
-  SIGNAL_ACTION_LABELS,
+  SIGNAL_STATUS_TAGS,
+  SignalStatusTagSchema,
+  SIGNAL_STATUS_LABELS,
+  SignalContactSchema,
   SignalActionSchema,
   CreateSignalActionSchema,
 } from './signals.js';
-export type { 
-  Signal, 
-  SignalsListQuery, 
+export type {
+  Signal,
+  SignalsListQuery,
   SignalsListResponse,
-  SignalActionType,
+  SignalStatusTag,
+  SignalContact,
   SignalAction,
-  CreateSignalAction
+  CreateSignalAction,
 } from './signals.js';
 
 // Companies
